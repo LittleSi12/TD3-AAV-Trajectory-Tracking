@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 训练产物（模型、日志、图表）
+results/models/*.zip
+results/models/*.pkl
+results/logs/
+results/figures/*.png
+
+# TensorBoard
+*.tfevents.*
+
+# 生成的轨迹图
+UAV_Environment/rescue_path_plot.png
+
+# 环境变量
+.env

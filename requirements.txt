@@ -1,0 +1,12 @@
+# 环境依赖
+numpy==1.26.4
+matplotlib==3.8.4
+pandas==2.2.2
+
+# 强化学习依赖
+gymnasium==0.29.1
+stable-baselines3==2.2.1
+tensorboard==2.16.2
+
+# 其他依赖
+scipy==1.12.0
