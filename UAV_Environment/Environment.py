@@ -39,7 +39,7 @@ class UAV2DEnv(gym.Env):
 
     # 用于归一化观测的参考尺度
     _DIST_SCALE = 100.0   # 距离归一化参考值
-    _VEL_SCALE = 10.0     # 速度归一化参考值（与 MAX_VEL 一致）
+    _VEL_SCALE = 20.0     # 速度归一化参考值
 
     def __init__(self, config=EnvConfig):
         super().__init__()
@@ -74,20 +74,34 @@ class UAV2DEnv(gym.Env):
         self._prev_action = np.zeros(2, dtype=np.float32)
 
     # ------------------------------------------------------------------
-    # 轨迹
+    # 轨迹池（类级别缓存，所有实例共享）
     # ------------------------------------------------------------------
+    _traj_pool = []
+    _POOL_SIZE = 100
 
     @staticmethod
     def _load_trajectory(path):
         df = pd.read_csv(path)
         return df[["x", "y"]].values.astype(np.float32)
 
-    def _random_trajectory(self):
+    @classmethod
+    def _ensure_pool(cls):
+        """首次调用时预生成轨迹池。"""
+        if len(cls._traj_pool) >= cls._POOL_SIZE:
+            return
         from UAV_Environment.TrajectoryGenerator import TrajectoryGenerator
-        gen = TrajectoryGenerator()
-        gen.seed = np.random.randint(0, 2**31)
-        gen.generate()
-        return gen.smooth_path
+        print(f"预生成 {cls._POOL_SIZE} 条轨迹...")
+        for i in range(cls._POOL_SIZE):
+            gen = TrajectoryGenerator()
+            gen.seed = np.random.randint(0, 2**31)
+            gen.generate()
+            cls._traj_pool.append(gen.smooth_path)
+        print(f"轨迹池就绪 ({cls._POOL_SIZE} 条)")
+
+    def _random_trajectory(self):
+        self._ensure_pool()
+        idx = np.random.randint(0, len(self._traj_pool))
+        return self._traj_pool[idx].copy()
 
     # ------------------------------------------------------------------
     # Gym 接口
@@ -183,7 +197,7 @@ class UAV2DEnv(gym.Env):
         reward = 0.0
 
         # 1) 高斯型跟随奖励：sigma=3.0，鼓励靠近目标
-        sigma = 3.0
+        sigma = self.cfg.FOLLOW_DIST
         follow_reward = np.exp(-(dist / sigma) ** 2)
         reward += 2.0 * follow_reward
 

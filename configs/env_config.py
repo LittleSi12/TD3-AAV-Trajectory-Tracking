@@ -26,8 +26,8 @@ class EnvConfig:
     Y_MAX = 20.0
 
     # 无人机参数
-    MAX_VEL = 10.0              # 最大速度 (m/s)，每步最大位移1m
-    MAX_YAW_RATE = 1.5          # 最大偏航率 (rad/s)，低速下转弯更灵活
+    MAX_VEL = 20.0              # 最大速度 (m/s)
+    MAX_YAW_RATE = 1.5          # 最大偏航率 (rad/s)
     DT = 0.1                    # 时间步长 (s)
 
     # 跟随参数
@@ -41,7 +41,7 @@ class EnvConfig:
     W_ACT = 0.001               # 动作平滑惩罚权重
 
     # 其他参数
-    MAX_STEPS = 10000
+    MAX_STEPS = 6000
     BOUND = 1200
     NUM_LOOKAHEAD = 3
 

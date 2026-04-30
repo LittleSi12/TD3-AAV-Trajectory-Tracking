@@ -140,13 +140,17 @@ class TrainingCallback(BaseCallback):
 class TD3Trainer:
     """封装 TD3 训练流程。不使用 VecNormalize，环境内置归一化。"""
 
+    N_ENVS = 4  # 并行环境数
+
     def __init__(self):
         self.cfg = RLConfig()
         os.makedirs(os.path.dirname(self.cfg.SAVE_PATH), exist_ok=True)
         os.makedirs(self.cfg.LOG_PATH, exist_ok=True)
 
-        # 只用 DummyVecEnv，不加 VecNormalize
-        self.venv = DummyVecEnv([lambda: UAV2DEnv()])
+        # 预生成轨迹池（避免每次 reset 重新计算）
+        UAV2DEnv._ensure_pool()
+
+        self.venv = DummyVecEnv([lambda: UAV2DEnv() for _ in range(self.N_ENVS)])
 
         n_actions = self.venv.action_space.shape[0]
         action_noise = NormalActionNoise(
@@ -210,7 +214,8 @@ class TD3Trainer:
 
         steps = additional_timesteps or self.cfg.TRAIN_TIMESTEPS
 
-        self.venv = DummyVecEnv([lambda: UAV2DEnv()])
+        UAV2DEnv._ensure_pool()
+        self.venv = DummyVecEnv([lambda: UAV2DEnv() for _ in range(self.N_ENVS)])
         self.model = TD3.load(path, env=self.venv)
         prev_steps = self.model.num_timesteps
         target_steps = prev_steps + steps
