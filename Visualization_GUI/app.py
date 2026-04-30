@@ -48,14 +48,25 @@ class TrajectoryVisualizerApp(ctk.CTk):
         super().__init__()
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
-        self.title("搜救无人机轨迹可视化系统")
+        self.title("搜救无人机轨迹跟随可视化系统")
         self.geometry("1280x780")
         self.minsize(1100,700)
         self.configure(fg_color=C_BG)
         # 启动后自动最大化
         self.after(100, lambda: self.state("zoomed"))
         self.generator=None; self.sim_result=None; self._anim_id=None
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
+
+    def _on_close(self):
+        """关闭窗口时彻底退出进程。"""
+        if self._anim_id is not None:
+            self.after_cancel(self._anim_id)
+            self._anim_id = None
+        plt.close("all")
+        self.destroy()
+        import sys
+        sys.exit(0)
 
     def _build_ui(self):
         self.grid_columnconfigure(0,weight=5)
@@ -104,10 +115,10 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.tab_2d = self.tabview.add("    2D 视角    ")
         self.tab_3d = self.tabview.add("    3D 视角    ")
         ctk.CTkLabel(self.tab_2d, text="点击「环境设置」开始",
-                     font=("SimSun",14), text_color=C_DIM
+                     font=("SimSun",18), text_color=C_DIM
                      ).place(relx=0.5,rely=0.5,anchor="center")
         ctk.CTkLabel(self.tab_3d, text="点击「环境设置」开始",
-                     font=("SimSun",14), text_color=C_DIM
+                     font=("SimSun",18), text_color=C_DIM
                      ).place(relx=0.5,rely=0.5,anchor="center")
 
         # Row 1 right: 日志
@@ -123,11 +134,25 @@ class TrajectoryVisualizerApp(ctk.CTk):
                       fg_color="#94a3b8", hover_color="#64748b", text_color="white",
                       corner_radius=6, height=28, width=60,
                       command=self._clear_log).pack(side="right")
-        self.log_box = ctk.CTkTextbox(lp, fg_color=C_CARD2, text_color=C_LOG,
-            font=("Consolas",15), corner_radius=8, border_width=1,
-            border_color=C_BORDER, wrap="word")
+        self.log_box = ctk.CTkTextbox(lp, fg_color=C_CARD2, text_color="#64748b",
+            font=("Consolas",20), corner_radius=8, border_width=1,
+            border_color=C_BORDER, wrap="none")
         self.log_box.grid(row=1,column=0,sticky="nsew",padx=10,pady=(0,10))
-        self._log("系统就绪，等待操作...")
+        # 配置富文本 tag
+        tb = self.log_box._textbox
+        tb.tag_configure("title",    foreground="#1e293b", font=("SimSun", 21, "bold"))
+        tb.tag_configure("sep",      foreground="#cbd5e1")
+        tb.tag_configure("key",      foreground="#475569", font=("SimSun", 20))
+        tb.tag_configure("val",      foreground="#1e40af", font=("Consolas", 20, "bold"))
+        tb.tag_configure("success",  foreground="#059669", font=("SimSun", 20, "bold"))
+        tb.tag_configure("error",    foreground="#dc2626", font=("SimSun", 20, "bold"))
+        tb.tag_configure("info",     foreground="#64748b", font=("SimSun", 20))
+        tb.tag_configure("data",     foreground="#334155", font=("Consolas", 19))
+        tb.tag_configure("zone",     foreground="#475569", font=("Consolas", 19))
+        tb.tag_configure("dim",      foreground="#94a3b8", font=("Consolas", 17))
+        tb.tag_configure("init",     foreground="#64748b", font=("SimSun", 24))
+        self._log_styled("系统就绪，等待操作...", "init")
+        self._log("")
 
         self.fig_2d=None; self.ax_2d=None; self.canvas_2d=None
         self.fig_3d=None; self.ax_3d=None; self.canvas_3d=None
@@ -137,6 +162,51 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.log_box.insert("end", text+"\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
+
+    def _log_styled(self, text, tag=None):
+        """插入带 tag 样式的一行文本。"""
+        self.log_box.configure(state="normal")
+        if tag:
+            tb = self.log_box._textbox
+            start = tb.index("end-1c")
+            tb.insert("end", text + "\n")
+            end = tb.index("end-1c")
+            tb.tag_add(tag, start, end)
+        else:
+            self.log_box.insert("end", text + "\n")
+        self.log_box.see("end")
+        self.log_box.configure(state="disabled")
+
+    def _log_kv(self, key, value):
+        """插入一行键值对，key 和 value 分别着色。"""
+        self.log_box.configure(state="normal")
+        tb = self.log_box._textbox
+        # key 部分
+        s1 = tb.index("end-1c")
+        tb.insert("end", f"  {key}  ")
+        e1 = tb.index("end-1c")
+        tb.tag_add("key", s1, e1)
+        # value 部分
+        s2 = tb.index("end-1c")
+        tb.insert("end", f"{value}\n")
+        e2 = tb.index("end-1c")
+        tb.tag_add("val", s2, e2)
+        self.log_box.see("end")
+        self.log_box.configure(state="disabled")
+
+    def _log_title(self, title):
+        """阶段标题，带颜色装饰线。"""
+        self._log("")
+        self._log_styled("  ━━━━━━━━━━━━━━━━", "sep")
+        self._log_styled(f"  ▶  {title}", "title")
+        self._log_styled("  ━━━━━━━━━━━━━━━━", "sep")
+
+    def _log_row(self, key, value):
+        """键值行，带颜色区分。"""
+        self._log_kv(key, value)
+
+    def _log_sep(self):
+        self._log("")
 
     def _clear_log(self):
         self.log_box.configure(state="normal")
@@ -191,7 +261,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
     def _draw_environment(self):
         gen = self.generator
         self._init_charts()
-        self._log("\n=== 环境设置 ===")
+        self._log_title("环境设置")
         rng = np.random.RandomState(gen.seed)
         for idx,(x,y,radius,dl,nc) in enumerate(gen.parent_points):
             name,emoji,color = DISASTER_TYPES[idx%len(DISASTER_TYPES)]
@@ -214,13 +284,16 @@ class TrajectoryVisualizerApp(ctk.CTk):
             self.ax_3d.plot(x+radius*np.cos(theta),y+radius*np.sin(theta),
                 0,color=color,linestyle="--",linewidth=2,alpha=0.5)
             self.ax_3d.scatter(x,y,0,c=color,marker="x",s=80,zorder=5)
-            self._log(f"Zone {idx+1}: {emoji}{name} ({x},{y}) R={radius} DL={dl} 子点={nc}")
-        self.ax_2d.set_title("搜救环境 — 受灾区域分布",fontsize=22)
+            # 名称补齐：用普通空格将短名称右填充到与四字名称等宽
+            pad_spaces = (4 - len(name)) * 2
+            padded = name + ' ' * pad_spaces
+            self._log_styled(f"  [{idx+1}] {emoji} {padded}  ({x:>3d},{y:>3d})  R={radius:<3d}  DL={dl:<2d}  N={nc}", "zone")
+        self._log("")
+        self._log_styled("  ✅ 环境设置完成，请点击「轨迹规划」", "success")
         self.ax_3d.set_title("搜救环境 — 3D 视角",fontsize=22)
         self._redraw()
         self.btn_env.configure(state="normal")
         self.btn_plan.configure(state="normal",fg_color=C_ACCENT)
-        self._log("环境设置完成，请点击「轨迹规划」")
 
     # === 阶段二 ===
     def _on_plan(self):
@@ -246,9 +319,12 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.ax_3d.set_title("轨迹规划中... — 3D",fontsize=22)
         diffs = np.diff(sp,axis=0)
         total_len = np.sum(np.hypot(diffs[:,0],diffs[:,1]))
-        self._log(f"\n=== 轨迹规划 ===")
-        self._log(f"轨迹点数: {len(sp)}  路径长度: {total_len:.1f} m  关键点: {len(gen.path)}")
-        self._blink_count=0; self._blink_total=10; self._do_blink()
+        self._log_title("轨迹规划")
+        self._log_row("轨迹点数", str(len(sp)))
+        self._log_row("路径长度", f"{total_len:.1f} m")
+        self._log_row("关键点数", str(len(gen.path)))
+        self._log_sep()
+        self._blink_count=0; self._blink_total=6; self._do_blink()
 
     def _do_blink(self):
         if self._blink_count >= self._blink_total:
@@ -263,7 +339,8 @@ class TrajectoryVisualizerApp(ctk.CTk):
             self._redraw()
             self.btn_plan.configure(state="normal")
             self.btn_start.configure(state="normal",fg_color=C_GREEN)
-            self._log("轨迹规划完成，请点击「任务开始」")
+            self._log("")
+            self._log_styled("  ✅ 轨迹规划完成，请点击「任务开始」", "success")
             return
         a = self._traj_line.get_alpha()
         new_a = 0.0 if a>0.5 else 1.0
@@ -287,18 +364,19 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.btn_env.configure(state="disabled")
         self.btn_plan.configure(state="disabled")
         self.btn_start.configure(text="⏹ 结束任务", fg_color=C_RED, hover_color="#dc2626")
-        self._log("\n=== 任务开始 ===\n正在加载 TD3 模型...")
+        self._log_title("任务开始")
+        self._log_styled("  正在加载 TD3 模型...", "info")
         def _worker():
             try:
                 from Visualization_GUI.inference import load_model, run_follow
                 model = load_model()
-                self._log("模型加载成功，开始仿真推理...")
+                self._log_styled("  模型加载成功，开始仿真推理...", "info")
                 result = run_follow(model, self.generator.smooth_path)
                 self.sim_result = result
-                self._log(f"仿真完成: {result['steps']} 步, 进度 {result['progress']:.0%}")
+                self._log_styled(f"  仿真完成: {result['steps']} 步，进度 {result['progress']:.0%}", "success")
                 self.after(0, self._start_animation)
             except Exception as e:
-                self.after(0, lambda: self._log(f"❌ 错误: {e}"))
+                self.after(0, lambda: self._log_styled(f"  ❌ 错误: {e}", "error"))
                 self.after(0, lambda: self.btn_start.configure(state="normal"))
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -316,22 +394,33 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.ax_3d.set_title("任务执行中 — 3D",fontsize=22)
         # 地面轨迹逐步绘制线
         self._ground_line, = self.ax_2d.plot([],[],color="green",linestyle="--",
-            linewidth=2,label="地面搜救路径",zorder=3)
+            linewidth=3.5,label="地面搜救路径",zorder=3)
         self._ground_line_3d, = self.ax_3d.plot([],[],[],color="green",linestyle="--",
-            linewidth=2,label="地面搜救路径",zorder=3)
-        # 无人机轨迹逐步绘制线
-        self._uav_line, = self.ax_2d.plot([],[],color="#f97316",linewidth=2.5,label="无人机轨迹",zorder=4)
+            linewidth=3.5,label="地面搜救路径",zorder=3)
+        # 无人机轨迹逐步绘制线（半透明，不遮挡地面轨迹）
+        self._uav_line, = self.ax_2d.plot([],[],color="#f97316",linewidth=2,alpha=0.6,label="无人机轨迹",zorder=4)
         self._gm, = self.ax_2d.plot([],[],"go",markersize=10,zorder=7)
         self._um, = self.ax_2d.plot([],[],marker="^",color="#f97316",markersize=12,zorder=7)
         self._dl, = self.ax_2d.plot([],[],"r-",linewidth=1,alpha=0.6,zorder=6)
-        self.ax_2d.legend(fontsize=19)
-        self._uav3d, = self.ax_3d.plot([],[],[],color="#f97316",linewidth=2.5,label="无人机轨迹",zorder=4)
-        self.ax_3d.legend(fontsize=19)
+        from matplotlib.lines import Line2D
+        from matplotlib.patches import FancyArrow
+        legend_handles = [
+            Line2D([0],[0],color="green",linestyle="--",linewidth=2,label="地面搜救路径"),
+            Line2D([0],[0],marker="o",color="w",markerfacecolor="green",markersize=10,label="起始点"),
+            Line2D([0],[0],marker="o",color="w",markerfacecolor="red",markersize=10,label="终点"),
+            Line2D([0],[0],color="#f97316",linewidth=2.5,label="无人机轨迹"),
+        ]
+        self.ax_2d.legend(handles=legend_handles, fontsize=19, loc="upper left")
+        self._uav3d, = self.ax_3d.plot([],[],[],color="#f97316",linewidth=2,alpha=0.6,label="无人机轨迹",zorder=4)
+        self.ax_3d.legend(handles=legend_handles, fontsize=19, loc="upper left")
         self._redraw()
-        self._af=0; self._as=max(1,r["steps"]//300)
+        self._af=0; self._as=max(1,r["steps"]//60)
         self._aux=[]; self._auy=[]
         self._agx=[]; self._agy=[]  # 地面轨迹逐步点
-        self._log("\n--- 实时日志 ---")
+        self._log_title("实时日志")
+        self._log("")
+        self._log_styled("  步数   地面坐标        无人机坐标      距离", "dim")
+        self._log("")
         self._animate()
 
     def _animate(self):
@@ -365,7 +454,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
         ux,uy = r["uav_pts"][uav_idx]
         self._gm.set_data([gx],[gy]); self._um.set_data([ux],[uy])
         self._dl.set_data([gx,ux],[gy,uy])
-        self._uav3d.set_data_3d(self._aux, self._auy, [0]*len(self._aux))
+        self._uav3d.set_data_3d(self._aux, self._auy, [20]*len(self._aux))
         # 指标用实际数据（不延后）
         dn=r["distances"][end-1]; ad=np.mean(r["distances"][:end])
         i5=np.mean(r["distances"][:end]<=5.0)*100; pr=end/total
@@ -374,17 +463,20 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.card_avg.set_value(f"{ad:.1f}m")
         self.card_in5m.set_value(f"{i5:.0f}%")
         if end%(step*10)<step or end>=total:
-            self._log(f"Step {end:>5d} | 地面=({gx:.0f},{gy:.0f}) UAV=({ux:.0f},{uy:.0f}) 距离={dn:.1f}m")
+            self._log_styled(
+                f"  #{end:<5d}  G({gx:>4.0f},{gy:>4.0f})  U({ux:>4.0f},{uy:>4.0f})  Δ {dn:.1f}m",
+                "data"
+            )
         self._redraw()
         if end<total:
-            self._anim_id = self.after(30, self._animate)
+            self._anim_id = self.after(16, self._animate)
         else:
             # 补齐延后的无人机轨迹点
             for i in range(len(self._aux), total):
                 ux,uy = r["uav_pts"][i]
                 self._aux.append(ux); self._auy.append(uy)
             self._uav_line.set_data(self._aux, self._auy)
-            self._uav3d.set_data_3d(self._aux, self._auy, [0]*len(self._aux))
+            self._uav3d.set_data_3d(self._aux, self._auy, [20]*len(self._aux))
             self._redraw()
             self._finish()
 
@@ -404,9 +496,13 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self.ax_2d.set_title("搜救任务完成",fontsize=22)
         self.ax_3d.set_title("任务完成 — 3D",fontsize=22)
         self._redraw()
-        self._log(f"\n=== 任务完成 ===")
-        self._log(f"执行步数: {end}  进度: {end/r['steps']:.0%}")
-        self._log(f"平均距离: {ad:.2f}m  最大: {md:.2f}m  5m内: {i5:.1f}%")
+        self._log_title("任务完成")
+        self._log_row("执行步数", str(end))
+        self._log_row("完成进度", f"{end/r['steps']:.0%}")
+        self._log_row("平均距离", f"{ad:.2f} m")
+        self._log_row("最大距离", f"{md:.2f} m")
+        self._log_row("5m内比例", f"{i5:.1f}%")
+        self._log_sep()
         # 恢复按钮
         self.btn_start.configure(text="③ 任务开始", fg_color="#94a3b8", state="disabled")
         self.btn_env.configure(state="normal")
