@@ -5,145 +5,111 @@ from UAV_Environment.Environment import UAV2DEnv
 from Utils.Visualization import Visualization
 from Utils.DataIO import DataIO
 from configs.rl_config import RLConfig
+from configs.env_config import EnvConfig
 
 
 class ModelEvaluator:
-    """使用训练好的模型评估无人机轨迹跟踪效果。"""
+    """评估训练好的模型在新轨迹上的跟随效果。"""
 
-    def __init__(self, model, vec_env=None):
-        """
-        Parameters
-        ----------
-        model : stable_baselines3 model
-        vec_env : VecNormalize env (可选)，用于保持与训练时一致的观测归一化。
-                  如果不传则直接使用原始环境。
-        """
+    def __init__(self, model):
         self.model = model
-        self.vec_env = vec_env
-        # 用于获取参考轨迹等原始数据
-        self.raw_env = UAV2DEnv()
-
+        self.follow_dist = EnvConfig.FOLLOW_DIST
         os.makedirs(RLConfig.FIGURE_DIR, exist_ok=True)
 
     def evaluate(self, episodes=RLConfig.EVAL_EPISODES):
-        """运行多轮评估，返回统计指标并保存可视化结果。"""
-        total_rewards = []
-        total_distances = []
-        trajectories = []
+        """在随机生成的新轨迹上评估多轮。"""
+        all_rewards = []
+        all_distances = []
+        all_trajectories = []
+        all_references = []
+        all_progress = []
 
-        for episode in range(episodes):
-            # 根据是否有 VecNormalize 选择不同的交互方式
-            if self.vec_env is not None:
-                ep_rew, ep_dist, ep_traj = self._run_episode_vec()
-            else:
-                ep_rew, ep_dist, ep_traj = self._run_episode_raw()
+        for ep in range(episodes):
+            rew, dists, traj, ref, prog = self._run_episode()
 
-            total_rewards.append(ep_rew)
-            total_distances.append(ep_dist)
-            trajectories.append(ep_traj)
-            print(f"Episode {episode + 1}: Reward = {ep_rew:.2f}")
+            all_rewards.append(rew)
+            all_distances.append(dists)
+            all_trajectories.append(traj)
+            all_references.append(ref)
+            all_progress.append(prog)
 
-        avg_reward = np.mean(total_rewards)
-        avg_distance = np.mean([np.mean(d) for d in total_distances])
-        max_distance = np.max([np.max(d) for d in total_distances])
+            within = np.mean(np.array(dists) <= self.follow_dist) * 100
+            print(
+                f"Episode {ep+1}: Reward={rew:.1f}, "
+                f"Progress={prog:.1%}, "
+                f"AvgDist={np.mean(dists):.2f}m, "
+                f"Within {self.follow_dist}m: {within:.1f}%"
+            )
 
-        print(f"\n评估结果:")
-        print(f"  平均奖励:     {avg_reward:.2f}")
-        print(f"  平均距离误差: {avg_distance:.2f}")
-        print(f"  最大距离误差: {max_distance:.2f}")
+        avg_reward = np.mean(all_rewards)
+        avg_dist = np.mean([np.mean(d) for d in all_distances])
+        max_dist = np.max([np.max(d) for d in all_distances])
+        avg_progress = np.mean(all_progress)
+        avg_within = np.mean([
+            np.mean(np.array(d) <= self.follow_dist) for d in all_distances
+        ]) * 100
 
-        self._save_results(total_rewards, total_distances, trajectories)
+        print(f"\n评估结果 ({episodes} 轮):")
+        print(f"  平均奖励:       {avg_reward:.2f}")
+        print(f"  平均进度:       {avg_progress:.1%}")
+        print(f"  平均跟随距离:   {avg_dist:.2f} m")
+        print(f"  最大跟随距离:   {max_dist:.2f} m")
+        print(f"  {self.follow_dist}m 内比例: {avg_within:.1f}%")
+
+        self._save_results(all_rewards, all_distances,
+                           all_trajectories, all_references)
 
         return {
             "avg_reward": avg_reward,
-            "avg_distance": avg_distance,
-            "max_distance": max_distance,
+            "avg_distance": avg_dist,
+            "max_distance": max_dist,
+            "avg_progress": avg_progress,
+            "within_follow_pct": avg_within,
         }
 
-    # ------------------------------------------------------------------
-    # 内部运行方法
-    # ------------------------------------------------------------------
-
-    def _run_episode_vec(self):
-        """通过 VecNormalize 环境运行一个 episode。"""
-        obs = self.vec_env.reset()
-        reward_sum = 0.0
-        distances = []
-        trajectory = []
-        done = False
-
-        while not done:
-            # VecEnv 的 obs 是 (1, obs_dim)
-            raw_obs = self.vec_env.get_original_obs()[0]
-            x, y = raw_obs[0], raw_obs[1]
-            tx, ty = raw_obs[4], raw_obs[5]
-            trajectory.append([x, y])
-            distances.append(np.hypot(x - tx, y - ty))
-
-            action, _ = self.model.predict(obs, deterministic=True)
-            obs, reward, dones, infos = self.vec_env.step(action)
-            reward_sum += reward[0]
-            done = dones[0]
-
-        return reward_sum, distances, trajectory
-
-    def _run_episode_raw(self):
-        """直接通过原始环境运行一个 episode（无归一化）。"""
-        obs, _ = self.raw_env.reset()
+    def _run_episode(self):
+        """直接通过原始环境运行一个 episode。"""
+        env = UAV2DEnv()
+        obs, _ = env.reset()
+        ref = env.ref.copy()
         reward_sum = 0.0
         distances = []
         trajectory = []
         terminated = False
         truncated = False
+        progress = 0.0
 
         while not (terminated or truncated):
-            x, y = obs[0], obs[1]
-            tx, ty = obs[4], obs[5]
-            trajectory.append([x, y])
-            distances.append(np.hypot(x - tx, y - ty))
+            trajectory.append([env.x, env.y])
 
             action, _ = self.model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = self.raw_env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             reward_sum += reward
+            progress = info.get("progress", progress)
+            distances.append(info["dist"])  # step 后的距离，和训练时一致
 
-        return reward_sum, distances, trajectory
+        env.close()
+        return reward_sum, distances, trajectory, ref, progress
 
-    # ------------------------------------------------------------------
-    # 可视化保存（委托给 Utils.Visualization）
-    # ------------------------------------------------------------------
-
-    def _save_results(self, total_rewards, total_distances, trajectories):
-        """保存奖励图、距离误差图、轨迹图。"""
+    def _save_results(self, rewards, distances, trajectories, references):
         fig_dir = RLConfig.FIGURE_DIR
 
-        # 奖励图
-        Visualization.plot_rewards(
-            total_rewards,
-            save_path=os.path.join(fig_dir, "rewards.png"),
-        )
-
-        # 距离误差图
-        Visualization.plot_distance_errors(
-            total_distances,
-            save_path=os.path.join(fig_dir, "distance_errors.png"),
-        )
-
-        # 轨迹图
-        Visualization.plot_trajectories(
-            reference=self.raw_env.ref,
-            uav_trajectories=trajectories,
-            save_path=os.path.join(fig_dir, "trajectories.png"),
-        )
-
-        # 保存评估数据到 CSV
+        Visualization.plot_rewards(rewards,
+                                   save_path=os.path.join(fig_dir, "rewards.png"))
+        Visualization.plot_distance_errors(distances,
+                                           save_path=os.path.join(fig_dir, "distance_errors.png"))
+        if references:
+            Visualization.plot_trajectories(
+                reference=references[0],
+                uav_trajectories=trajectories,
+                save_path=os.path.join(fig_dir, "trajectories.png"),
+            )
         DataIO.save_results(
-            {"avg_reward": [np.mean(total_rewards)],
-             "avg_distance": [np.mean([np.mean(d) for d in total_distances])],
-             "max_distance": [np.max([np.max(d) for d in total_distances])]},
+            {"avg_reward": [np.mean(rewards)],
+             "avg_distance": [np.mean([np.mean(d) for d in distances])],
+             "max_distance": [np.max([np.max(d) for d in distances])]},
             filename=os.path.join(fig_dir, "eval_results.csv"),
         )
 
     def close(self):
-        self.raw_env.close()
-        if self.vec_env is not None:
-            self.vec_env.close()
+        pass

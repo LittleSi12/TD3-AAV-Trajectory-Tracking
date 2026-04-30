@@ -48,17 +48,38 @@ class TrajectoryGenerator:
         return False
 
     def _generate_disaster_zones(self, rng):
-        """随机生成互不重叠的受灾区域（父点）。"""
+        """随机生成互不重叠的受灾区域（父点）。
+
+        子点数量与覆盖面积成正比，受灾等级作为密度系数：
+            num_child = clamp( base × (area / ref_area) × (dl / 5), 4, 150 )
+        其中 ref_area 为中等半径 (125) 的面积，base=30 为基准子点数。
+        """
         self.parent_points = []
         max_attempts = 10000
         attempts = 0
+        ref_area = np.pi * 125.0 ** 2   # 中等半径面积作为基准
+        base_count = 30                  # 基准子点数
+
+        # 显示边界：覆盖圆不得超出 [-100, region+100]
+        margin = 100
+
         while len(self.parent_points) < self.num_zones and attempts < max_attempts:
             attempts += 1
-            x = rng.randint(0, self.region_width + 1)
-            y = rng.randint(0, self.region_height + 1)
             radius = rng.randint(50, 201)
+            # 限制中心坐标，使 center ± radius 不超出 [-margin, region+margin]
+            x_lo = max(0, -margin + radius)
+            x_hi = min(self.region_width, self.region_width + margin - radius)
+            y_lo = max(0, -margin + radius)
+            y_hi = min(self.region_height, self.region_height + margin - radius)
+            x = rng.randint(x_lo, x_hi + 1)
+            y = rng.randint(y_lo, y_hi + 1)
             disaster_level = rng.randint(1, 11)
-            num_child = rng.randint(4, 101)
+            # 子点数量 = 基准数 × 面积比 × 受灾等级系数，限制在 [4, 150]
+            area = np.pi * radius ** 2
+            num_child = int(np.clip(
+                round(base_count * (area / ref_area) * (disaster_level / 5.0)),
+                4, 150,
+            ))
             if not self._is_overlapping((x, y, radius), self.parent_points):
                 self.parent_points.append((x, y, radius, disaster_level, num_child))
 
