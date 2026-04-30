@@ -39,7 +39,7 @@ class UAV2DEnv(gym.Env):
 
     # 用于归一化观测的参考尺度
     _DIST_SCALE = 100.0   # 距离归一化参考值
-    _VEL_SCALE = 20.0     # 速度归一化参考值
+    _VEL_SCALE = 10.0     # 速度归一化参考值（与 MAX_VEL 一致）
 
     def __init__(self, config=EnvConfig):
         super().__init__()
@@ -182,17 +182,12 @@ class UAV2DEnv(gym.Env):
         # ================================================================
         reward = 0.0
 
-        # 1) 高斯型跟随奖励：sigma=3.0，dist=3m时奖励峰值37%，dist=5m时仅6%
+        # 1) 高斯型跟随奖励：sigma=3.0，鼓励靠近目标
         sigma = 3.0
         follow_reward = np.exp(-(dist / sigma) ** 2)
         reward += 2.0 * follow_reward
 
-        # 2) 超过 FOLLOW_DIST 的越界惩罚（封顶，避免远距离时奖励爆炸）
-        if dist > self.cfg.FOLLOW_DIST:
-            over = min(dist - self.cfg.FOLLOW_DIST, 20.0)  # 最多惩罚 20m 的量
-            reward -= 0.5 * over
-
-        # 3) 航向对齐奖励
+        # 2) 航向对齐奖励
         dx = tx - self.x
         dy = ty - self.y
         heading_reward = 0.0
@@ -234,7 +229,7 @@ class UAV2DEnv(gym.Env):
             "y": self.y,
             "progress": self.p / self.N,
             # 奖励分项，用于日志分析
-            "r_follow": 2.0 * follow_reward - 0.5 * min(max(0, dist - self.cfg.FOLLOW_DIST), 20.0),
+            "r_follow": 2.0 * follow_reward,
             "r_heading": heading_reward,
             "r_smooth": -self.cfg.W_ACT * float(np.sum(action_delta ** 2)),
             "r_total": reward,

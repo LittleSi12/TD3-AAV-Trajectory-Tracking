@@ -96,7 +96,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
             command=self._on_start)
         self.btn_start.pack(side="left",padx=(0,16))
 
-        self.card_in5m = MetricCard(top,"5m内比例","--",C_PURPLE)
+        self.card_in5m = MetricCard(top,"8m内比例","--",C_PURPLE)
         self.card_in5m.pack(side="right",padx=3)
         self.card_avg = MetricCard(top,"平均距离","--",C_ORANGE)
         self.card_avg.pack(side="right",padx=3)
@@ -460,7 +460,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self._uav3d.set_data_3d(self._aux, self._auy, [20]*len(self._aux))
         # 指标用实际数据（不延后）
         dn=r["distances"][end-1]; ad=np.mean(r["distances"][:end])
-        i5=np.mean(r["distances"][:end]<=5.0)*100; pr=end/total
+        i5=np.mean(r["distances"][:end]<=8.0)*100; pr=end/total
         self.card_progress.set_value(f"{pr:.0%}")
         self.card_dist.set_value(f"{dn:.1f}m")
         self.card_avg.set_value(f"{ad:.1f}m")
@@ -492,7 +492,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
         end = self._af if hasattr(self,'_af') else r["steps"]
         end = min(end, r["steps"])
         if end > 0:
-            ad=np.mean(r["distances"][:end]); i5=np.mean(r["distances"][:end]<=5.0)*100
+            ad=np.mean(r["distances"][:end]); i5=np.mean(r["distances"][:end]<=8.0)*100
             md=np.max(r["distances"][:end])
         else:
             ad=0; i5=0; md=0
@@ -504,7 +504,7 @@ class TrajectoryVisualizerApp(ctk.CTk):
         self._log_row("完成进度", f"{end/r['steps']:.0%}")
         self._log_row("平均距离", f"{ad:.2f} m")
         self._log_row("最大距离", f"{md:.2f} m")
-        self._log_row("5m内比例", f"{i5:.1f}%")
+        self._log_row("8m内比例", f"{i5:.1f}%")
         self._log_sep()
         # 恢复按钮
         self.btn_start.configure(text="③ 任务开始", fg_color="#94a3b8", state="disabled")
