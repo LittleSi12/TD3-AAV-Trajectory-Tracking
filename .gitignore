@@ -1,37 +1,80 @@
-# Python
+# ============================================================
+# UAV TD3 轨迹跟踪项目 — Git 忽略规则
+# ============================================================
+
+# ------ Python ------
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# ------ 打包/分发 ------
+*.egg
 *.egg-info/
 dist/
 build/
-*.egg
+sdist/
+wheels/
+*.whl
 
-# Virtual environments
+# ------ 虚拟环境 ------
 venv/
 .venv/
 env/
+ENV/
 
-# IDE
+# ------ IDE / 编辑器 ------
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# ------ 操作系统 ------
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# 训练产物（模型、日志、图表）
+# ------ 训练产物（模型、日志、图表） ------
 results/models/*.zip
 results/models/*.pkl
-results/logs/
+results/logs/*.csv
+results/logs/*.json
 results/figures/*.png
+results/figures/*.csv
 
-# TensorBoard
+# ------ TensorBoard ------
 *.tfevents.*
+tb_logs/
 
-# 生成的轨迹图
+# ------ 生成的轨迹图 ------
 UAV_Environment/rescue_path_plot.png
 
-# 环境变量
+# ------ 环境变量 / 密钥 ------
 .env
+.env.*
+*.pem
+*.key
+
+# ------ Jupyter Notebook ------
+.ipynb_checkpoints/
+*.ipynb
+
+# ------ pytest / coverage ------
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ------ mypy / type checking ------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
