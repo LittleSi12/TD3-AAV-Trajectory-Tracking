@@ -1,6 +1,9 @@
 """
-启动搜救无人机轨迹可视化 GUI。
+启动搜救无人机轨迹跟随可视化 GUI。
 用法：python RunGUI.py
+
+Author: Little Si
+Date:   2026-04
 """
 
 import os

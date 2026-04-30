@@ -1,3 +1,10 @@
+"""
+模型评估器，在随机轨迹上评估跟随效果并生成可视化。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import numpy as np
 import os
 

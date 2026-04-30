@@ -1,4 +1,10 @@
-# 环境配置参数
+"""
+环境配置参数。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 
 class EnvConfig:
     # 轨迹参数

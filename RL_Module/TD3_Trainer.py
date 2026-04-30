@@ -1,3 +1,10 @@
+"""
+TD3 训练器，封装训练、断点续训与回调日志。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import os
 import numpy as np
 from stable_baselines3 import TD3

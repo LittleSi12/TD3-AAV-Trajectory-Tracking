@@ -1,3 +1,10 @@
+"""
+Matplotlib 可视化工具集。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import os
 import numpy as np
 import matplotlib

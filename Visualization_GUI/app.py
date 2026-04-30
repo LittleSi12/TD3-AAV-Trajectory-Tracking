@@ -1,5 +1,8 @@
 """
-搜救无人机轨迹可视化 GUI — 三阶段交互式仿真
+搜救无人机轨迹跟随可视化 GUI — 三阶段交互式仿真。
+
+Author: Little Si
+Date:   2026-04
 """
 
 import sys, os, time, threading

@@ -1,3 +1,10 @@
+"""
+搜救场景轨迹生成器。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import os
 import numpy as np
 import pandas as pd

@@ -1,3 +1,10 @@
+"""
+测试/评估入口脚本。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import os
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"

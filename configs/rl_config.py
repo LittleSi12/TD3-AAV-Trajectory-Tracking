@@ -1,3 +1,11 @@
+"""
+强化学习（TD3）超参数配置。
+
+Author: Little Si
+Date:   2026-04
+"""
+
+
 class RLConfig:
     # 策略网络类型
     POLICY = "MlpPolicy"

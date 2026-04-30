@@ -1,3 +1,10 @@
+"""
+CSV 读写工具。
+
+Author: Little Si
+Date:   2026-04
+"""
+
 import pandas as pd
 import numpy as np
 

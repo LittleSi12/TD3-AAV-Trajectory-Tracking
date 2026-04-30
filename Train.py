@@ -6,6 +6,9 @@
     python Train.py --resume            # 从最新 checkpoint 继续训练
     python Train.py --resume --steps 500000   # 继续训练 50 万步
     python Train.py --resume --ckpt results/models/td3_uav_ckpt_300000  # 从指定 checkpoint 继续
+
+Author: Little Si
+Date:   2026-04
 """
 
 import os

@@ -6,6 +6,9 @@
 2. 每 episode 随机轨迹 → 避免过拟合
 3. 前瞻点 → 提前规划转弯
 4. 高斯型跟随奖励 → 平滑梯度引导
+
+Author: Little Si
+Date:   2026-04
 """
 
 import numpy as np
