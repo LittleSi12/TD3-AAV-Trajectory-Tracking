@@ -43,7 +43,7 @@ class TrainingCallback(BaseCallback):
         self.log_file = open(self._log_path, "w")
         self.log_file.write(
             "Episode,Reward,Steps,Progress,AvgDist,Within5m%,"
-            "R_Follow,R_Heading,R_Smooth,TotalSteps\n"
+            "R_Follow,R_Heading,R_Smooth,ActorLoss,CriticLoss,TotalSteps\n"
         )
 
     def _on_step(self) -> bool:
@@ -99,11 +99,16 @@ class TrainingCallback(BaseCallback):
                 avg_dist = self._ep_dist_sum / max(ep_step, 1)
                 within_pct = self._ep_within_count / max(ep_step, 1) * 100
 
+                # 获取 loss（从 model logger）
+                actor_loss = self.model.logger.name_to_value.get("train/actor_loss", 0)
+                critic_loss = self.model.logger.name_to_value.get("train/critic_loss", 0)
+
                 self.log_file.write(
                     f"{self.episode_count},{ep_rew:.2f},{ep_step},"
                     f"{progress:.4f},{avg_dist:.2f},{within_pct:.1f},"
                     f"{self._ep_r_follow:.2f},{self._ep_r_heading:.2f},"
-                    f"{self._ep_r_smooth:.4f},{self.num_timesteps}\n"
+                    f"{self._ep_r_smooth:.4f},{actor_loss:.4f},{critic_loss:.6f},"
+                    f"{self.num_timesteps}\n"
                 )
                 self.log_file.flush()
 

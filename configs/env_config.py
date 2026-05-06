@@ -31,8 +31,8 @@ class EnvConfig:
     DT = 0.1                    # 时间步长 (s)
 
     # 跟随参数
-    FOLLOW_DIST = 5.0           # 目标跟随距离 (m)
-    ARRIVE_DIST = 5.0           # 到达目标点的阈值 (m)
+    FOLLOW_DIST = 5.0           # 高斯奖励目标距离 (m)
+    ARRIVE_DIST = 2.0           # 到达目标点切换阈值 (m)，需小于点间距
 
     # 奖励参数
     R_ARRIVE = 5.0              # 到达目标点的奖励
