@@ -35,15 +35,17 @@ class TrainingCallback(BaseCallback):
         self._ep_r_heading = 0.0
         self._ep_r_smooth = 0.0
         self._ep_dist_sum = 0.0
+        self._ep_max_dist = 0.0
         self._ep_within_count = 0
+        self._ep_speed_sum = 0.0
         self._last_save_step = 0
 
         os.makedirs(log_dir, exist_ok=True)
         self._log_path = os.path.join(log_dir, "training_log.csv")
         self.log_file = open(self._log_path, "w")
         self.log_file.write(
-            "Episode,Reward,Steps,Progress,AvgDist,Within5m%,"
-            "R_Follow,R_Heading,R_Smooth,ActorLoss,CriticLoss,TotalSteps\n"
+            "Episode,Reward,Steps,Progress,AvgDist,MaxDist,Within5m%,AvgSpeed,"
+            "R_Follow,R_Heading,R_Smooth,EndReason,TotalSteps\n"
         )
 
     def _on_step(self) -> bool:
@@ -65,6 +67,8 @@ class TrainingCallback(BaseCallback):
                 self._ep_r_smooth += info.get("r_smooth", 0)
                 d = info.get("dist", 0)
                 self._ep_dist_sum += d
+                self._ep_max_dist = max(self._ep_max_dist, d)
+                self._ep_speed_sum += info.get("speed", 0)
                 if d <= 5.0:
                     self._ep_within_count += 1
 
@@ -98,16 +102,14 @@ class TrainingCallback(BaseCallback):
 
                 avg_dist = self._ep_dist_sum / max(ep_step, 1)
                 within_pct = self._ep_within_count / max(ep_step, 1) * 100
-
-                # 获取 loss（从 model logger）
-                actor_loss = self.model.logger.name_to_value.get("train/actor_loss", 0)
-                critic_loss = self.model.logger.name_to_value.get("train/critic_loss", 0)
+                avg_speed = self._ep_speed_sum / max(ep_step, 1)
+                end_reason = info.get("end_reason", "unknown")
 
                 self.log_file.write(
                     f"{self.episode_count},{ep_rew:.2f},{ep_step},"
-                    f"{progress:.4f},{avg_dist:.2f},{within_pct:.1f},"
+                    f"{progress:.4f},{avg_dist:.2f},{self._ep_max_dist:.2f},{within_pct:.1f},{avg_speed:.2f},"
                     f"{self._ep_r_follow:.2f},{self._ep_r_heading:.2f},"
-                    f"{self._ep_r_smooth:.4f},{actor_loss:.4f},{critic_loss:.6f},"
+                    f"{self._ep_r_smooth:.4f},{end_reason},"
                     f"{self.num_timesteps}\n"
                 )
                 self.log_file.flush()
@@ -121,11 +123,10 @@ class TrainingCallback(BaseCallback):
                         f"Steps: {self.num_timesteps:>8d} | "
                         f"Reward: {avg_rew:>8.1f} | "
                         f"Progress: {avg_prog:>5.1%} | "
-                        f"AvgDist: {avg_dist:>6.1f}m | "
+                        f"AvgDist: {avg_dist:>5.1f}m | "
+                        f"MaxDist: {self._ep_max_dist:>5.1f}m | "
                         f"In5m: {within_pct:>5.1f}% | "
-                        f"R_f:{self._ep_r_follow:>6.1f} "
-                        f"R_h:{self._ep_r_heading:>5.1f} "
-                        f"R_s:{self._ep_r_smooth:>6.3f}"
+                        f"End: {end_reason}"
                     )
 
                 self._current_episode_reward = 0.0
@@ -134,7 +135,9 @@ class TrainingCallback(BaseCallback):
                 self._ep_r_heading = 0.0
                 self._ep_r_smooth = 0.0
                 self._ep_dist_sum = 0.0
+                self._ep_max_dist = 0.0
                 self._ep_within_count = 0
+                self._ep_speed_sum = 0.0
         return True
 
     def on_training_end(self):

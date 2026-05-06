@@ -10,7 +10,6 @@ import os
 
 from UAV_Environment.Environment import UAV2DEnv
 from Utils.Visualization import Visualization
-from Utils.DataIO import DataIO
 from configs.rl_config import RLConfig
 from configs.env_config import EnvConfig
 
@@ -30,22 +29,28 @@ class ModelEvaluator:
         all_trajectories = []
         all_references = []
         all_progress = []
+        all_end_reasons = []
+        all_max_dists = []
 
         for ep in range(episodes):
-            rew, dists, traj, ref, prog = self._run_episode()
+            rew, dists, traj, ref, prog, end_reason = self._run_episode()
 
             all_rewards.append(rew)
             all_distances.append(dists)
             all_trajectories.append(traj)
             all_references.append(ref)
             all_progress.append(prog)
+            all_end_reasons.append(end_reason)
+            all_max_dists.append(np.max(dists))
 
             within = np.mean(np.array(dists) <= self.follow_dist) * 100
             print(
                 f"Episode {ep+1}: Reward={rew:.1f}, "
                 f"Progress={prog:.1%}, "
                 f"AvgDist={np.mean(dists):.2f}m, "
-                f"Within {self.follow_dist}m: {within:.1f}%"
+                f"MaxDist={np.max(dists):.2f}m, "
+                f"Within {self.follow_dist}m: {within:.1f}%, "
+                f"End: {end_reason}"
             )
 
         avg_reward = np.mean(all_rewards)
@@ -65,6 +70,7 @@ class ModelEvaluator:
 
         self._save_results(all_rewards, all_distances,
                            all_trajectories, all_references)
+        self._save_eval_csv(all_rewards, all_distances, all_progress, all_end_reasons)
 
         return {
             "avg_reward": avg_reward,
@@ -85,6 +91,7 @@ class ModelEvaluator:
         terminated = False
         truncated = False
         progress = 0.0
+        end_reason = "unknown"
 
         while not (terminated or truncated):
             trajectory.append([env.x, env.y])
@@ -93,10 +100,12 @@ class ModelEvaluator:
             obs, reward, terminated, truncated, info = env.step(action)
             reward_sum += reward
             progress = info.get("progress", progress)
-            distances.append(info["dist"])  # step 后的距离，和训练时一致
+            distances.append(info["dist"])
+            if info.get("end_reason"):
+                end_reason = info["end_reason"]
 
         env.close()
-        return reward_sum, distances, trajectory, ref, progress
+        return reward_sum, distances, trajectory, ref, progress, end_reason
 
     def _save_results(self, rewards, distances, trajectories, references):
         fig_dir = RLConfig.FIGURE_DIR
@@ -111,12 +120,27 @@ class ModelEvaluator:
                 uav_trajectories=trajectories,
                 save_path=os.path.join(fig_dir, "trajectories.png"),
             )
-        DataIO.save_results(
-            {"avg_reward": [np.mean(rewards)],
-             "avg_distance": [np.mean([np.mean(d) for d in distances])],
-             "max_distance": [np.max([np.max(d) for d in distances])]},
-            filename=os.path.join(fig_dir, "eval_results.csv"),
-        )
+
+    def _save_eval_csv(self, rewards, distances, progress_list, end_reasons):
+        """保存每轮详细评估数据到 CSV。"""
+        import pandas as pd
+        rows = []
+        for i in range(len(rewards)):
+            dists = np.array(distances[i])
+            rows.append({
+                "Episode": i + 1,
+                "Reward": round(rewards[i], 2),
+                "Steps": len(dists),
+                "Progress": round(progress_list[i], 4),
+                "AvgDist": round(np.mean(dists), 2),
+                "MaxDist": round(np.max(dists), 2),
+                f"Within{self.follow_dist}m%": round(np.mean(dists <= self.follow_dist) * 100, 1),
+                "EndReason": end_reasons[i],
+            })
+        df = pd.DataFrame(rows)
+        path = os.path.join(RLConfig.FIGURE_DIR, "eval_results.csv")
+        df.to_csv(path, index=False)
+        print(f"评估详情已保存到：{path}")
 
     def close(self):
         pass

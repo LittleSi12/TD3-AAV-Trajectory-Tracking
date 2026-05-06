@@ -15,8 +15,10 @@ matplotlib.rcParams["font.serif"] = ["SimSun", "Times New Roman"]
 matplotlib.rcParams["axes.unicode_minus"] = False
 import matplotlib.pyplot as plt
 
-OUTPUT_DIR = "./results/figures/training_analysis"
-LOG_PATH = "./results/logs/training_log.csv"
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
+OUTPUT_DIR = os.path.join(_PROJECT_ROOT, "results", "figures", "training_analysis")
+LOG_PATH = os.path.join(_PROJECT_ROOT, "results", "logs", "training_log.csv")
 
 
 def smooth(data, window=10):
@@ -29,7 +31,8 @@ def smooth(data, window=10):
 
 def load_log(path=LOG_PATH):
     df = pd.read_csv(path)
-    print(f"加载日志: {path}, {len(df)} 条记录")
+    print(f"加载日志: {path}")
+    print(f"  总记录: {len(df)} 条, 步数范围: {df['TotalSteps'].iloc[0]}~{df['TotalSteps'].iloc[-1]}")
     return df
 
 
@@ -165,6 +168,73 @@ def plot_loss_curves(df, save_dir):
     print("  ✓ loss_curves.png")
 
 
+def plot_max_distance_curve(df, save_dir):
+    """最大跟随距离曲线"""
+    if "MaxDist" not in df.columns:
+        print("  ⚠ 日志中无 MaxDist 数据，跳过")
+        return
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(df["Episode"], df["MaxDist"], alpha=0.3, color="crimson")
+    if len(df) > 10:
+        sm = smooth(df["MaxDist"].values)
+        ax.plot(range(5, 5 + len(sm)), sm, color="crimson", linewidth=2, label="滑动平均")
+    ax.axhline(y=10.0, color="red", linestyle="--", linewidth=1.5, label="警戒线 10m")
+    ax.axhline(y=5.0, color="orange", linestyle="--", linewidth=1.5, label="目标 5m")
+    ax.set_xlabel("Episode", fontsize=12)
+    ax.set_ylabel("最大跟随距离 (m)", fontsize=12)
+    ax.set_title("最大偏离距离变化曲线", fontsize=14)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, "max_distance_curve.png"), dpi=150)
+    plt.close(fig)
+    print("  ✓ max_distance_curve.png")
+
+
+def plot_end_reason_stats(df, save_dir):
+    """终止原因统计饼图"""
+    if "EndReason" not in df.columns:
+        print("  ⚠ 日志中无 EndReason 数据，跳过")
+        return
+
+    counts = df["EndReason"].value_counts()
+    labels = counts.index.tolist()
+    values = counts.values.tolist()
+
+    # 颜色映射
+    color_map = {
+        "completed": "#10b981",
+        "truncated": "#f59e0b",
+        "out_of_bound": "#ef4444",
+        "unknown": "#94a3b8",
+    }
+    colors = [color_map.get(l, "#64748b") for l in labels]
+
+    # 中文标签
+    label_map = {
+        "completed": "完成",
+        "truncated": "超时截断",
+        "out_of_bound": "飞出边界",
+        "unknown": "未知",
+    }
+    display_labels = [f"{label_map.get(l, l)} ({v})" for l, v in zip(labels, values)]
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    wedges, texts, autotexts = ax.pie(
+        values, labels=display_labels, colors=colors,
+        autopct="%1.1f%%", startangle=90, textprops={"fontsize": 12}
+    )
+    for at in autotexts:
+        at.set_fontsize(13)
+        at.set_fontweight("bold")
+    ax.set_title("Episode 终止原因分布", fontsize=14)
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, "end_reason_stats.png"), dpi=150)
+    plt.close(fig)
+    print("  ✓ end_reason_stats.png")
+
+
 def plot_combined_dashboard(df, save_dir):
     """综合仪表盘（4 合 1）"""
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
@@ -245,23 +315,45 @@ def main():
 
     plot_reward_curve(df, OUTPUT_DIR)
     plot_distance_curve(df, OUTPUT_DIR)
+    plot_max_distance_curve(df, OUTPUT_DIR)
     plot_within5m_curve(df, OUTPUT_DIR)
     plot_progress_curve(df, OUTPUT_DIR)
     plot_reward_components(df, OUTPUT_DIR)
     plot_loss_curves(df, OUTPUT_DIR)
+    plot_end_reason_stats(df, OUTPUT_DIR)
     plot_combined_dashboard(df, OUTPUT_DIR)
     plot_episode_length(df, OUTPUT_DIR)
 
     # 输出统计摘要
     print(f"\n{'='*50}")
-    print("  训练统计摘要")
+    print("  训练过程概况")
     print(f"{'='*50}")
     print(f"  总 Episode 数:    {len(df)}")
     print(f"  总训练步数:       {df['TotalSteps'].iloc[-1]}")
-    print(f"  最终平均奖励:     {df['Reward'].tail(10).mean():.1f}")
-    print(f"  最终平均距离:     {df['AvgDist'].tail(10).mean():.2f} m")
-    print(f"  最终 5m 内比例:   {df['Within5m%'].tail(10).mean():.1f}%")
-    print(f"  最终完成进度:     {df['Progress'].tail(10).mean()*100:.1f}%")
+    print(f"  最高单轮奖励:     {df['Reward'].max():.1f}")
+    print(f"  最低平均距离:     {df['AvgDist'].min():.2f} m")
+    print(f"  最高 5m 内比例:   {df['Within5m%'].max():.1f}%")
+
+    # 读取评估结果展示最终模型性能
+    eval_path = os.path.join(_PROJECT_ROOT, "results", "figures", "eval_results.csv")
+    if os.path.exists(eval_path):
+        eval_df = pd.read_csv(eval_path)
+        print(f"\n{'='*50}")
+        print("  最终模型性能（评估结果）")
+        print(f"{'='*50}")
+        print(f"  评估轮数:         {len(eval_df)}")
+        print(f"  平均跟随距离:     {eval_df['AvgDist'].mean():.2f} m")
+        print(f"  最大偏离距离:     {eval_df['MaxDist'].max():.2f} m")
+        # 动态查找 Within 列名
+        within_col = [c for c in eval_df.columns if "Within" in c]
+        if within_col:
+            print(f"  {within_col[0]}:  {eval_df[within_col[0]].mean():.1f}%")
+        print(f"  平均完成进度:     {eval_df['Progress'].mean()*100:.1f}%")
+        completed = (eval_df['EndReason'] == 'completed').sum() if 'EndReason' in eval_df.columns else '-'
+        print(f"  完成轮数:         {completed}/{len(eval_df)}")
+    else:
+        print(f"\n  ⚠ 未找到评估结果，请先运行 python Test.py")
+
     print(f"{'='*50}\n")
 
 

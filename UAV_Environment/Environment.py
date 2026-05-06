@@ -218,6 +218,7 @@ class UAV2DEnv(gym.Env):
 
         terminated = False
         truncated = False
+        end_reason = ""
 
         # 到达当前目标点
         if dist < self.cfg.ARRIVE_DIST:
@@ -225,23 +226,28 @@ class UAV2DEnv(gym.Env):
             self.p += 1
             if self.p >= self.N:
                 terminated = True
+                end_reason = "completed"
                 reward += self.cfg.R_FINISH
 
         # 飞出边界
         if abs(self.x) > self.cfg.BOUND or abs(self.y) > self.cfg.BOUND:
             terminated = True
+            end_reason = "out_of_bound"
             reward += self.cfg.R_OUT
 
         # 超时
         if self.step_cnt >= self.cfg.MAX_STEPS:
             truncated = True
+            end_reason = "truncated"
 
         info = {
             "point": self.p,
             "dist": dist,
             "x": self.x,
             "y": self.y,
+            "speed": np.hypot(self.vx, self.vy),
             "progress": self.p / self.N,
+            "end_reason": end_reason,
             # 奖励分项，用于日志分析
             "r_follow": 2.0 * follow_reward,
             "r_heading": heading_reward,
