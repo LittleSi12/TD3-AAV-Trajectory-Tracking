@@ -1,0 +1,6 @@
+Episode,Reward,Steps,Progress,AvgDist,MaxDist,Within5.0m%,EndReason
+1,4803.03,1091,1.0,2.56,7.64,88.7,completed
+2,13529.96,6000,0.624,2.05,9.05,99.8,truncated
+3,5051.79,1263,1.0,2.82,9.23,85.7,completed
+4,4823.8,1050,1.0,2.21,5.67,98.3,completed
+5,4637.18,919,1.0,1.94,5.76,99.0,completed

@@ -41,13 +41,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# ------ 训练产物（模型、日志、图表） ------
-results/models/*.zip
-results/models/*.pkl
-results/logs/*.csv
-results/logs/*.json
-results/figures/*.png
-results/figures/*.csv
+# ------ 训练产物（保留最终模型和评估结果） ------
+# 中间 checkpoint 不提交（太大）
+results/models/td3_uav_ckpt_*.zip
 
 # ------ TensorBoard ------
 *.tfevents.*
